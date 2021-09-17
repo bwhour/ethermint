@@ -66,7 +66,6 @@ func NewKeeper(
 	ak types.AccountKeeper, bankKeeper types.BankKeeper, sk types.StakingKeeper,
 	tracer string, debug bool,
 ) *Keeper {
-
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
 		panic("the EVM module account has not been set")
@@ -140,23 +139,14 @@ func (k Keeper) ChainID() *big.Int {
 // Required by Web3 API.
 // ----------------------------------------------------------------------------
 
-// GetBlockBloom gets bloombits from block height
-func (k Keeper) GetBlockBloom(ctx sdk.Context, height int64) (ethtypes.Bloom, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.BloomKey(height))
-	if len(bz) == 0 {
-		return ethtypes.Bloom{}, false
-	}
-
-	return ethtypes.BytesToBloom(bz), true
-}
-
-// SetBlockBloom sets the mapping from block height to bloom bits
-func (k Keeper) SetBlockBloom(ctx sdk.Context, height int64, bloom ethtypes.Bloom) {
-	store := ctx.KVStore(k.storeKey)
-
-	key := types.BloomKey(height)
-	store.Set(key, bloom.Bytes())
+// EmitBlockBloomEvent emit block bloom events
+func (k Keeper) EmitBlockBloomEvent(ctx sdk.Context, bloom ethtypes.Bloom) {
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			types.EventTypeBlockBloom,
+			sdk.NewAttribute(types.AttributeKeyEthereumBloom, string(bloom.Bytes())),
+		),
+	)
 }
 
 // GetBlockBloomTransient returns bloom bytes for the current block height
@@ -200,6 +190,12 @@ func (k Keeper) SetTxHashTransient(hash common.Hash) {
 	store.Set(types.KeyPrefixTransientTxHash, hash.Bytes())
 }
 
+// SetTxIndexTransient set the index of processing transaction
+func (k Keeper) SetTxIndexTransient(index uint64) {
+	store := k.Ctx().TransientStore(k.transientKey)
+	store.Set(types.KeyPrefixTransientTxIndex, sdk.Uint64ToBigEndian(index))
+}
+
 // GetTxIndexTransient returns EVM transaction index on the current block.
 func (k Keeper) GetTxIndexTransient() uint64 {
 	store := k.Ctx().TransientStore(k.transientKey)
@@ -215,8 +211,7 @@ func (k Keeper) GetTxIndexTransient() uint64 {
 // value by one and then sets the new index back to the transient store.
 func (k Keeper) IncreaseTxIndexTransient() {
 	txIndex := k.GetTxIndexTransient()
-	store := k.Ctx().TransientStore(k.transientKey)
-	store.Set(types.KeyPrefixTransientTxIndex, sdk.Uint64ToBigEndian(txIndex+1))
+	k.SetTxIndexTransient(txIndex + 1)
 }
 
 // ResetRefundTransient resets the available refund amount to 0
@@ -229,45 +224,14 @@ func (k Keeper) ResetRefundTransient(ctx sdk.Context) {
 // Log
 // ----------------------------------------------------------------------------
 
-// GetAllTxLogs return all the transaction logs from the store.
-func (k Keeper) GetAllTxLogs(ctx sdk.Context) []types.TransactionLogs {
-	store := ctx.KVStore(k.storeKey)
-	iter := sdk.KVStorePrefixIterator(store, types.KeyPrefixLogs)
-	defer iter.Close()
-
-	mapOrder := []string{}
-	var mapLogs = make(map[string][]*types.Log)
-	for ; iter.Valid(); iter.Next() {
-		var txLog types.Log
-		k.cdc.MustUnmarshal(iter.Value(), &txLog)
-
-		txlogs := mapLogs[txLog.TxHash]
-		if len(txlogs) == 0 {
-			mapOrder = append(mapOrder, txLog.TxHash)
-		}
-
-		txlogs = append(txlogs, &txLog)
-		mapLogs[txLog.TxHash] = txlogs
-	}
-
-	txsLogs := []types.TransactionLogs{}
-	for _, txHash := range mapOrder {
-		if len(mapLogs[txHash]) > 0 {
-			txLogs := types.TransactionLogs{Hash: txHash, Logs: mapLogs[txHash]}
-			txsLogs = append(txsLogs, txLogs)
-		}
-	}
-	return txsLogs
-}
-
-// GetLogs returns the current logs for a given transaction hash from the KVStore.
+// GetTxLogsTransient returns the current logs for a given transaction hash from the KVStore.
 // This function returns an empty, non-nil slice if no logs are found.
-func (k Keeper) GetTxLogs(txHash common.Hash) []*ethtypes.Log {
-	store := prefix.NewStore(k.Ctx().KVStore(k.storeKey), types.KeyPrefixLogs)
+func (k Keeper) GetTxLogsTransient(txHash common.Hash) []*ethtypes.Log {
+	store := prefix.NewStore(k.Ctx().TransientStore(k.transientKey), types.KeyPrefixTransientTxLogs)
 
 	// We store the logs with key equal to txHash.Bytes() | sdk.Uint64ToBigEndian(uint64(log.Index)),
 	// therefore, we set the end boundary(excluded) to txHash.Bytes() | uint64.Max -> []byte
-	var end = txHash.Bytes()
+	end := txHash.Bytes()
 	end = append(end, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}...)
 
 	iter := store.Iterator(txHash.Bytes(), end)
@@ -283,46 +247,16 @@ func (k Keeper) GetTxLogs(txHash common.Hash) []*ethtypes.Log {
 	return logs
 }
 
-// SetLogs sets the logs for a transaction in the KVStore.
-func (k Keeper) SetLogs(txHash common.Hash, logs []*ethtypes.Log) {
-	store := prefix.NewStore(k.Ctx().KVStore(k.storeKey), types.KeyPrefixLogs)
-
-	for _, log := range logs {
-		var key = txHash.Bytes()
-		key = append(key, sdk.Uint64ToBigEndian(uint64(log.Index))...)
-		txIndexLog := types.NewLogFromEth(log)
-		bz := k.cdc.MustMarshal(txIndexLog)
-		store.Set(key, bz)
-	}
-}
-
 // SetLog sets the log for a transaction in the KVStore.
-func (k Keeper) SetLog(log *ethtypes.Log) {
-	store := prefix.NewStore(k.Ctx().KVStore(k.storeKey), types.KeyPrefixLogs)
+func (k Keeper) AddLogTransient(log *ethtypes.Log) {
+	store := prefix.NewStore(k.Ctx().TransientStore(k.transientKey), types.KeyPrefixTransientTxLogs)
 
-	var key = log.TxHash.Bytes()
+	key := log.TxHash.Bytes()
 	key = append(key, sdk.Uint64ToBigEndian(uint64(log.Index))...)
 
 	txIndexLog := types.NewLogFromEth(log)
 	bz := k.cdc.MustMarshal(txIndexLog)
 	store.Set(key, bz)
-}
-
-// DeleteLogs removes the logs from the KVStore. It is used during journal.Revert.
-func (k Keeper) DeleteTxLogs(ctx sdk.Context, txHash common.Hash) {
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixLogs)
-
-	// We store the logs with key equal to txHash.Bytes() | sdk.Uint64ToBigEndian(uint64(log.Index)),
-	// therefore, we set the end boundary(excluded) to txHash.Bytes() | uint64.Max -> []byte
-	var end = txHash.Bytes()
-	end = append(end, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}...)
-
-	iter := store.Iterator(txHash.Bytes(), end)
-	defer iter.Close()
-
-	for ; iter.Valid(); iter.Next() {
-		store.Delete(iter.Key())
-	}
 }
 
 // GetLogSizeTransient returns EVM log index on the current block.
@@ -356,7 +290,6 @@ func (k Keeper) GetAccountStorage(ctx sdk.Context, address common.Address) (type
 		storage = append(storage, types.NewState(key, value))
 		return false
 	})
-
 	if err != nil {
 		return types.Storage{}, err
 	}

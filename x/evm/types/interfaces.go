@@ -4,7 +4,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	ethcmn "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -18,6 +18,7 @@ type AccountKeeper interface {
 	GetAccount(ctx sdk.Context, addr sdk.AccAddress) authtypes.AccountI
 	SetAccount(ctx sdk.Context, account authtypes.AccountI)
 	RemoveAccount(ctx sdk.Context, account authtypes.AccountI)
+	GetParams(ctx sdk.Context) (params authtypes.Params)
 }
 
 // BankKeeper defines the expected interface needed to retrieve account balances.
@@ -42,5 +43,5 @@ type StakingKeeper interface {
 // EvmHooks event hooks for evm tx processing
 type EvmHooks interface {
 	// Must be called after tx is processed successfully, if return an error, the whole transaction is reverted.
-	PostTxProcessing(ctx sdk.Context, txHash ethcmn.Hash, logs []*ethtypes.Log) error
+	PostTxProcessing(ctx sdk.Context, txHash common.Hash, logs []*ethtypes.Log) error
 }

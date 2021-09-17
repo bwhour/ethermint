@@ -23,11 +23,11 @@ parent:
     <img alt="Go report card" src="https://goreportcard.com/badge/github.com/tharsis/ethermint"/>
   </a>
   <a href="https://bestpractices.coreinfrastructure.org/projects/5018">
-    <img src="https://bestpractices.coreinfrastructure.org/projects/5018/badge">
+    <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/tharsis/ethermint">
   </a>
 </div>
 <div align="center">
-  <a href="https://discord.gg/3ZbxEq4KDu">
+  <a href="https://discord.gg/trje9XuAmy">
     <img alt="Discord" src="https://img.shields.io/discord/809048090249134080.svg" />
   </a>
   <!-- <a href="https://github.com/tharsis/ethermint/actions?query=branch%3Amain+workflow%3ABuild">
@@ -47,7 +47,7 @@ parent:
 Ethermint is a scalable, high-throughput Proof-of-Stake blockchain that is fully compatible and
 interoperable with Ethereum. It's build using the the [Cosmos SDK](https://github.com/cosmos/cosmos-sdk/) which runs on top of [Tendermint Core](https://github.com/tendermint/tendermint) consensus engine.
 
-**Note**: Requires [Go 1.16+](https://golang.org/dl/)
+**Note**: Requires [Go 1.17+](https://golang.org/dl/)
 
 ## Installation
 
@@ -71,7 +71,7 @@ The following chat channels and forums are a great spot to ask questions about E
 
 - [Ethermint Twitter](https://twitter.com/ethermint)
 - [Tharsis Twitter](https://twitter.com/ethermint)
-- [Ethermint Discord](https://discord.gg/3ZbxEq4KDu)
+- [Ethermint Discord](https://discord.gg/trje9XuAmy)
 - [Ethermint Forum](https://forum.cosmos.network/c/ethermint)
 
 ## Contributing

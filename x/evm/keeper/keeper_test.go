@@ -28,11 +28,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	ethcmn "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -72,7 +70,7 @@ type KeeperTestSuite struct {
 	ctx         sdk.Context
 	app         *app.EthermintApp
 	queryClient types.QueryClient
-	address     ethcmn.Address
+	address     common.Address
 	consAddress sdk.ConsAddress
 
 	// for generate test tx
@@ -90,7 +88,7 @@ func (suite *KeeperTestSuite) DoSetupTest(t require.TestingT) {
 	// account key
 	priv, err := ethsecp256k1.GenerateKey()
 	require.NoError(t, err)
-	suite.address = ethcmn.BytesToAddress(priv.PubKey().Address().Bytes())
+	suite.address = common.BytesToAddress(priv.PubKey().Address().Bytes())
 	suite.signer = tests.NewSigner(priv)
 
 	// consensus key
@@ -130,7 +128,7 @@ func (suite *KeeperTestSuite) DoSetupTest(t require.TestingT) {
 
 	acc := &ethermint.EthAccount{
 		BaseAccount: authtypes.NewBaseAccount(sdk.AccAddress(suite.address.Bytes()), nil, 0, 0),
-		CodeHash:    common.BytesToHash(ethcrypto.Keccak256(nil)).String(),
+		CodeHash:    common.BytesToHash(crypto.Keccak256(nil)).String(),
 	}
 
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
@@ -215,6 +213,40 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	require.NoError(t, err)
 	require.Empty(t, rsp.VmError)
 	return crypto.CreateAddress(suite.address, nonce)
+}
+
+func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
+	ctx := sdk.WrapSDKContext(suite.ctx)
+	chainID := suite.app.EvmKeeper.ChainID()
+
+	transferData, err := ContractABI.Pack("transfer", to, amount)
+	require.NoError(t, err)
+	args, err := json.Marshal(&types.CallArgs{To: &contractAddr, From: &from, Data: (*hexutil.Bytes)(&transferData)})
+	require.NoError(t, err)
+	res, err := suite.queryClient.EstimateGas(ctx, &types.EthCallRequest{
+		Args:   args,
+		GasCap: 25_000_000,
+	})
+	require.NoError(t, err)
+
+	nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+	ercTransferTx := types.NewTx(
+		chainID,
+		nonce,
+		&contractAddr,
+		nil,
+		res.Gas,
+		nil,
+		transferData,
+		nil,
+	)
+	ercTransferTx.From = suite.address.Hex()
+	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
+	require.NoError(t, err)
+	rsp, err := suite.app.EvmKeeper.EthereumTx(ctx, ercTransferTx)
+	require.NoError(t, err)
+	require.Empty(t, rsp.VmError)
+	return ercTransferTx
 }
 
 func TestKeeperTestSuite(t *testing.T) {
