@@ -45,7 +45,6 @@
     - [QueryCosmosAccountResponse](#ethermint.evm.v1.QueryCosmosAccountResponse)
     - [QueryParamsRequest](#ethermint.evm.v1.QueryParamsRequest)
     - [QueryParamsResponse](#ethermint.evm.v1.QueryParamsResponse)
-    - [QueryStaticCallResponse](#ethermint.evm.v1.QueryStaticCallResponse)
     - [QueryStorageRequest](#ethermint.evm.v1.QueryStorageRequest)
     - [QueryStorageResponse](#ethermint.evm.v1.QueryStorageResponse)
     - [QueryTraceTxRequest](#ethermint.evm.v1.QueryTraceTxRequest)
@@ -256,13 +255,13 @@ TraceConfig holds extra parameters to trace functions.
 | `tracer` | [string](#string) |  | custom javascript tracer |
 | `timeout` | [string](#string) |  | overrides the default timeout of 5 seconds for JavaScript-based tracing calls |
 | `reexec` | [uint64](#uint64) |  | number of blocks the tracer is willing to go back |
-| `disable_memory` | [bool](#bool) |  | disable memory capture |
 | `disable_stack` | [bool](#bool) |  | disable stack capture |
 | `disable_storage` | [bool](#bool) |  | disable storage capture |
-| `disable_return_data` | [bool](#bool) |  | disable return data capture |
 | `debug` | [bool](#bool) |  | print output during capture end |
 | `limit` | [int32](#int32) |  | maximum length of output, but zero means unlimited |
 | `overrides` | [ChainConfig](#ethermint.evm.v1.ChainConfig) |  | Chain overrides, can be used to execute a trace using future fork rules |
+| `enable_memory` | [bool](#bool) |  | enable memory capture |
+| `enable_return_data` | [bool](#bool) |  | enable return data capture |
 
 
 
@@ -548,6 +547,7 @@ EthCallRequest defines EthCall request
 | ----- | ---- | ----- | ----------- |
 | `args` | [bytes](#bytes) |  | same json format as the json rpc api. |
 | `gas_cap` | [uint64](#uint64) |  | the default gas cap to be used |
+| `base_fee` | [string](#string) |  | header base fee used to generate the transaction |
 
 
 
@@ -700,21 +700,6 @@ QueryParamsResponse defines the response type for querying x/evm parameters.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `params` | [Params](#ethermint.evm.v1.Params) |  | params define the evm module parameters. |
-
-
-
-
-
-
-<a name="ethermint.evm.v1.QueryStaticCallResponse"></a>
-
-### QueryStaticCallResponse
-QueryStaticCallRequest defines static call response
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| `data` | [bytes](#bytes) |  |  |
 
 
 
