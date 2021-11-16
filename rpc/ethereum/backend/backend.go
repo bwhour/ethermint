@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -42,15 +43,21 @@ import (
 // Implemented by EVMBackend.
 type Backend interface {
 	// General Ethereum API
-	RPCGasCap() uint64 // global gas cap for eth_call over rpc: DoS protection
+	RPCGasCap() uint64            // global gas cap for eth_call over rpc: DoS protection
+	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
+	RPCTxFeeCap() float64         // RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for send-transaction variants. The unit is ether.
+
 	RPCMinGasPrice() int64
 	SuggestGasTipCap() (*big.Int, error)
 
 	// Blockchain API
 	BlockNumber() (hexutil.Uint64, error)
 	GetTendermintBlockByNumber(blockNum types.BlockNumber) (*tmrpctypes.ResultBlock, error)
+	GetTendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error)
 	GetBlockByNumber(blockNum types.BlockNumber, fullTx bool) (map[string]interface{}, error)
 	GetBlockByHash(hash common.Hash, fullTx bool) (map[string]interface{}, error)
+	BlockByNumber(blockNum types.BlockNumber) (*ethtypes.Block, error)
+	BlockByHash(blockHash common.Hash) (*ethtypes.Block, error)
 	CurrentHeader() *ethtypes.Header
 	HeaderByNumber(blockNum types.BlockNumber) (*ethtypes.Header, error)
 	HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error)
@@ -62,7 +69,7 @@ type Backend interface {
 	GetTransactionByHash(txHash common.Hash) (*types.RPCTransaction, error)
 	GetTxByEthHash(txHash common.Hash) (*tmrpctypes.ResultTx, error)
 	EstimateGas(args evmtypes.TransactionArgs, blockNrOptional *types.BlockNumber) (hexutil.Uint64, error)
-	BaseFee() (*big.Int, error)
+	BaseFee(height int64) (*big.Int, error)
 
 	// Filter API
 	BloomStatus() (uint64, uint64)
@@ -160,12 +167,102 @@ func (e *EVMBackend) GetBlockByHash(hash common.Hash, fullTx bool) (map[string]i
 		return nil, err
 	}
 
-	if resBlock.Block == nil {
+	if resBlock == nil || resBlock.Block == nil {
 		e.logger.Debug("BlockByHash block not found", "hash", hash.Hex())
 		return nil, nil
 	}
 
 	return e.EthBlockFromTendermint(resBlock.Block, fullTx)
+}
+
+// BlockByNumber returns the block identified by number.
+func (e *EVMBackend) BlockByNumber(blockNum types.BlockNumber) (*ethtypes.Block, error) {
+	height := blockNum.Int64()
+
+	switch blockNum {
+	case types.EthLatestBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
+		if currentBlockNumber > 0 {
+			height = int64(currentBlockNumber)
+		}
+	case types.EthPendingBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
+		if currentBlockNumber > 0 {
+			height = int64(currentBlockNumber)
+		}
+	case types.EthEarliestBlockNumber:
+		height = 1
+	default:
+		if blockNum < 0 {
+			return nil, errors.Errorf("incorrect block height: %d", height)
+		}
+	}
+
+	resBlock, err := e.clientCtx.Client.Block(e.ctx, &height)
+	if err != nil {
+		e.logger.Debug("HeaderByNumber failed", "height", height)
+		return nil, err
+	}
+
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, errors.Errorf("block not found for height %d", height)
+	}
+
+	return e.EthBlockFromTm(resBlock.Block)
+}
+
+// BlockByHash returns the block identified by hash.
+func (e *EVMBackend) BlockByHash(hash common.Hash) (*ethtypes.Block, error) {
+	resBlock, err := e.clientCtx.Client.BlockByHash(e.ctx, hash.Bytes())
+	if err != nil {
+		e.logger.Debug("HeaderByHash failed", "hash", hash.Hex())
+		return nil, err
+	}
+
+	if resBlock == nil || resBlock.Block == nil {
+		return nil, errors.Errorf("block not found for hash %s", hash)
+	}
+
+	return e.EthBlockFromTm(resBlock.Block)
+}
+
+func (e *EVMBackend) EthBlockFromTm(block *tmtypes.Block) (*ethtypes.Block, error) {
+	height := block.Height
+	bloom, err := e.BlockBloom(&height)
+	if err != nil {
+		e.logger.Debug("HeaderByNumber BlockBloom failed", "height", height)
+	}
+
+	baseFee, err := e.BaseFee(height)
+	if err != nil {
+		e.logger.Debug("HeaderByNumber BaseFee failed", "height", height, "error", err.Error())
+		return nil, err
+	}
+
+	ethHeader := types.EthHeaderFromTendermint(block.Header, bloom, baseFee)
+
+	var txs []*ethtypes.Transaction
+	for _, txBz := range block.Txs {
+		tx, err := e.clientCtx.TxConfig.TxDecoder()(txBz)
+		if err != nil {
+			e.logger.Debug("failed to decode transaction in block", "height", height, "error", err.Error())
+			continue
+		}
+
+		for _, msg := range tx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				continue
+			}
+
+			tx := ethMsg.AsTransaction()
+			txs = append(txs, tx)
+		}
+	}
+
+	// TODO: add tx receipts
+	ethBlock := ethtypes.NewBlock(ethHeader, txs, nil, nil, nil)
+	return ethBlock, nil
 }
 
 // GetTendermintBlockByNumber returns a Tendermint format block by block number
@@ -209,6 +306,21 @@ func (e *EVMBackend) GetTendermintBlockByNumber(blockNum types.BlockNumber) (*tm
 	return resBlock, nil
 }
 
+// GetTendermintBlockByHash returns a Tendermint format block by block number
+func (e *EVMBackend) GetTendermintBlockByHash(blockHash common.Hash) (*tmrpctypes.ResultBlock, error) {
+	resBlock, err := e.clientCtx.Client.BlockByHash(e.ctx, blockHash.Bytes())
+	if err != nil {
+		e.logger.Debug("tendermint client failed to get block", "blockHash", blockHash.Hex(), "error", err.Error())
+	}
+
+	if resBlock == nil || resBlock.Block == nil {
+		e.logger.Debug("GetBlockByNumber block not found", "blockHash", blockHash.Hex())
+		return nil, nil
+	}
+
+	return resBlock, nil
+}
+
 // BlockBloom query block bloom filter from block results
 func (e *EVMBackend) BlockBloom(height *int64) (ethtypes.Bloom, error) {
 	result, err := e.clientCtx.Client.BlockResults(e.ctx, height)
@@ -238,7 +350,7 @@ func (e *EVMBackend) EthBlockFromTendermint(
 
 	ctx := types.ContextWithHeight(block.Height)
 
-	baseFee, err := e.BaseFee()
+	baseFee, err := e.BaseFee(block.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -340,14 +452,15 @@ func (e *EVMBackend) CurrentHeader() *ethtypes.Header {
 // HeaderByNumber returns the block header identified by height.
 func (e *EVMBackend) HeaderByNumber(blockNum types.BlockNumber) (*ethtypes.Header, error) {
 	height := blockNum.Int64()
-	currentBlockNumber, _ := e.BlockNumber()
 
 	switch blockNum {
 	case types.EthLatestBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
 		if currentBlockNumber > 0 {
 			height = int64(currentBlockNumber)
 		}
 	case types.EthPendingBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
 		if currentBlockNumber > 0 {
 			height = int64(currentBlockNumber)
 		}
@@ -370,14 +483,13 @@ func (e *EVMBackend) HeaderByNumber(blockNum types.BlockNumber) (*ethtypes.Heade
 		e.logger.Debug("HeaderByNumber BlockBloom failed", "height", resBlock.Block.Height)
 	}
 
-	baseFee, err := e.BaseFee()
+	baseFee, err := e.BaseFee(resBlock.Block.Height)
 	if err != nil {
 		e.logger.Debug("HeaderByNumber BaseFee failed", "height", resBlock.Block.Height, "error", err.Error())
 		return nil, err
 	}
 
-	ethHeader := types.EthHeaderFromTendermint(resBlock.Block.Header, baseFee)
-	ethHeader.Bloom = bloom
+	ethHeader := types.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee)
 	return ethHeader, nil
 }
 
@@ -389,7 +501,7 @@ func (e *EVMBackend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, erro
 		return nil, err
 	}
 
-	if resBlock.Block == nil {
+	if resBlock == nil || resBlock.Block == nil {
 		return nil, errors.Errorf("block not found for hash %s", blockHash.Hex())
 	}
 
@@ -398,14 +510,13 @@ func (e *EVMBackend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, erro
 		e.logger.Debug("HeaderByHash BlockBloom failed", "height", resBlock.Block.Height)
 	}
 
-	baseFee, err := e.BaseFee()
+	baseFee, err := e.BaseFee(resBlock.Block.Height)
 	if err != nil {
 		e.logger.Debug("HeaderByHash BaseFee failed", "height", resBlock.Block.Height, "error", err.Error())
 		return nil, err
 	}
 
-	ethHeader := types.EthHeaderFromTendermint(resBlock.Block.Header, baseFee)
-	ethHeader.Bloom = bloom
+	ethHeader := types.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee)
 	return ethHeader, nil
 }
 
@@ -473,14 +584,15 @@ func (e *EVMBackend) GetLogs(hash common.Hash) ([][]*ethtypes.Log, error) {
 
 func (e *EVMBackend) GetLogsByNumber(blockNum types.BlockNumber) ([][]*ethtypes.Log, error) {
 	height := blockNum.Int64()
-	currentBlockNumber, _ := e.BlockNumber()
 
 	switch blockNum {
 	case types.EthLatestBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
 		if currentBlockNumber > 0 {
 			height = int64(currentBlockNumber)
 		}
 	case types.EthPendingBlockNumber:
+		currentBlockNumber, _ := e.BlockNumber()
 		if currentBlockNumber > 0 {
 			height = int64(currentBlockNumber)
 		}
@@ -710,21 +822,9 @@ func (e *EVMBackend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional 
 		return 0, err
 	}
 
-	baseFee, err := e.BaseFee()
-	if err != nil {
-		return 0, err
-	}
-
-	var bf *sdk.Int
-	if baseFee != nil {
-		aux := sdk.NewIntFromBigInt(baseFee)
-		bf = &aux
-	}
-
 	req := evmtypes.EthCallRequest{
-		Args:    bz,
-		GasCap:  e.RPCGasCap(),
-		BaseFee: bf,
+		Args:   bz,
+		GasCap: e.RPCGasCap(),
 	}
 
 	// From ContextWithHeight: if the provided height is 0,
@@ -765,6 +865,21 @@ func (e *EVMBackend) RPCGasCap() uint64 {
 	return e.cfg.JSONRPC.GasCap
 }
 
+// RPCEVMTimeout is the global evm timeout for eth-call variants.
+func (e *EVMBackend) RPCEVMTimeout() time.Duration {
+	return e.cfg.JSONRPC.EVMTimeout
+}
+
+// RPCGasCap is the global gas cap for eth-call variants.
+func (e *EVMBackend) RPCTxFeeCap() float64 {
+	return e.cfg.JSONRPC.TxFeeCap
+}
+
+// RPCFilterCap is the limit for total number of filters that can be created
+func (e *EVMBackend) RPCFilterCap() int32 {
+	return e.cfg.JSONRPC.FilterCap
+}
+
 // RPCMinGasPrice returns the minimum gas price for a transaction obtained from
 // the node config. If set value is 0, it will default to 20.
 
@@ -800,24 +915,41 @@ func (e *EVMBackend) SuggestGasTipCap() (*big.Int, error) {
 }
 
 // BaseFee returns the base fee tracked by the Fee Market module. If the base fee is not enabled,
-// it returns the initial base fee amount.
-func (e *EVMBackend) BaseFee() (*big.Int, error) {
-	res, err := e.queryClient.FeeMarket.BaseFee(e.ctx, &feemarkettypes.QueryBaseFeeRequest{})
-	if err != nil {
-		return nil, err
+// it returns the initial base fee amount. Return nil if London is not activated.
+func (e *EVMBackend) BaseFee(height int64) (*big.Int, error) {
+	cfg := e.ChainConfig()
+	if !cfg.IsLondon(new(big.Int).SetInt64(height)) {
+		return nil, nil
 	}
 
-	if res.BaseFee != nil {
-		return res.BaseFee.BigInt(), nil
-	}
-
+	// Checks the feemarket param NoBaseFee settings, return 0 if it is enabled.
 	resParams, err := e.queryClient.FeeMarket.Params(e.ctx, &feemarkettypes.QueryParamsRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	baseFee := big.NewInt(resParams.Params.InitialBaseFee)
-	return baseFee, nil
+	if resParams.Params.NoBaseFee {
+		return big.NewInt(0), nil
+	}
+
+	blockRes, err := e.clientCtx.Client.BlockResults(e.ctx, &height)
+	if err != nil {
+		return nil, err
+	}
+
+	baseFee := types.BaseFeeFromEvents(blockRes.EndBlockEvents)
+	if baseFee != nil {
+		return baseFee, nil
+	}
+
+	// If we cannot find in events, we tried to get it from the state.
+	// It will return feemarket.baseFee if london is activated but feemarket is not enable
+	res, err := e.queryClient.FeeMarket.BaseFee(types.ContextWithHeight(height), &feemarkettypes.QueryBaseFeeRequest{})
+	if err == nil && res.BaseFee != nil {
+		return res.BaseFee.BigInt(), nil
+	}
+
+	return nil, nil
 }
 
 // GetFilteredBlocks returns the block height list match the given bloom filters.

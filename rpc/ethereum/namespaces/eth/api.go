@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,10 +20,8 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -416,6 +415,7 @@ func (e *PublicAPI) FillTransaction(args evmtypes.TransactionArgs) (*rpctypes.Si
 
 	// Assemble the transaction and obtain rlp
 	tx := args.ToTransaction().AsTransaction()
+
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -432,38 +432,21 @@ func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) 
 	e.logger.Debug("eth_sendRawTransaction", "length", len(data))
 
 	// RLP decode raw transaction bytes
-	tx, err := e.clientCtx.TxConfig.TxDecoder()(data)
-	if err != nil {
+	tx := &ethtypes.Transaction{}
+	if err := tx.UnmarshalBinary(data); err != nil {
 		e.logger.Error("transaction decoding failed", "error", err.Error())
-
 		return common.Hash{}, err
 	}
 
-	ethereumTx, isEthTx := tx.(*evmtypes.MsgEthereumTx)
-	if !isEthTx {
-		e.logger.Debug("invalid transaction type", "type", fmt.Sprintf("%T", tx))
-		return common.Hash{}, fmt.Errorf("invalid transaction type %T", tx)
+	ethereumTx := &evmtypes.MsgEthereumTx{}
+	if err := ethereumTx.FromEthereumTx(tx); err != nil {
+		e.logger.Error("transaction converting failed", "error", err.Error())
+		return common.Hash{}, err
 	}
 
 	if err := ethereumTx.ValidateBasic(); err != nil {
 		e.logger.Debug("tx failed basic validation", "error", err.Error())
 		return common.Hash{}, err
-	}
-
-	builder, ok := e.clientCtx.TxConfig.NewTxBuilder().(authtx.ExtensionOptionsTxBuilder)
-	if !ok {
-		e.logger.Error("clientCtx.TxConfig.NewTxBuilder returns unsupported builder")
-	}
-
-	option, err := codectypes.NewAnyWithValue(&evmtypes.ExtensionOptionsEthereumTx{})
-	if err != nil {
-		e.logger.Error("codectypes.NewAnyWithValue failed to pack an obvious value", "error", err.Error())
-	}
-
-	builder.SetExtensionOptions(option)
-	err = builder.SetMsgs(tx.GetMsgs()...)
-	if err != nil {
-		e.logger.Error("builder.SetMsgs failed", "error", err.Error())
 	}
 
 	// Query params to use the EVM denomination
@@ -473,23 +456,14 @@ func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) 
 		return common.Hash{}, err
 	}
 
-	txData, err := evmtypes.UnpackTxData(ethereumTx.Data)
+	cosmosTx, err := ethereumTx.BuildTx(e.clientCtx.TxConfig.NewTxBuilder(), res.Params.EvmDenom)
 	if err != nil {
-		e.logger.Error("failed to unpack tx data", "error", err.Error())
+		e.logger.Error("failed to build cosmos tx", "error", err.Error())
 		return common.Hash{}, err
 	}
 
-	fees := sdk.Coins{
-		{
-			Denom:  res.Params.EvmDenom,
-			Amount: sdk.NewIntFromBigInt(txData.Fee()),
-		},
-	}
-	builder.SetFeeAmount(fees)
-	builder.SetGasLimit(ethereumTx.GetGas())
-
 	// Encode transaction by default Tx encoder
-	txBytes, err := e.clientCtx.TxConfig.TxEncoder()(builder.GetTx())
+	txBytes, err := e.clientCtx.TxConfig.TxEncoder()(cosmosTx)
 	if err != nil {
 		e.logger.Error("failed to encode eth tx using default encoder", "error", err.Error())
 		return common.Hash{}, err
@@ -510,6 +484,26 @@ func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) 
 	return txHash, nil
 }
 
+// checkTxFee is an internal function used to check whether the fee of
+// the given transaction is _reasonable_(under the cap).
+func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
+	// Short circuit if there is no cap for transaction fee at all.
+	if cap == 0 {
+		return nil
+	}
+	totalfee := new(big.Float).SetInt(new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(gas)))
+	// 1 photon in 10^18 aphoton
+	oneToken := new(big.Float).SetInt(big.NewInt(params.Ether))
+	// quo = rounded(x/y)
+	feeEth := new(big.Float).Quo(totalfee, oneToken)
+	// no need to check error from parsing
+	feeFloat, _ := feeEth.Float64()
+	if feeFloat > cap {
+		return fmt.Errorf("tx fee (%.2f ether) exceeds the configured cap (%.2f ether)", feeFloat, cap)
+	}
+	return nil
+}
+
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
 func (e *PublicAPI) Resend(ctx context.Context, args evmtypes.TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
@@ -524,6 +518,19 @@ func (e *PublicAPI) Resend(ctx context.Context, args evmtypes.TransactionArgs, g
 	}
 
 	matchTx := args.ToTransaction().AsTransaction()
+
+	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
+	price := matchTx.GasPrice()
+	if gasPrice != nil {
+		price = gasPrice.ToInt()
+	}
+	gas := matchTx.Gas()
+	if gasLimit != nil {
+		gas = uint64(*gasLimit)
+	}
+	if err := checkTxFee(price, gas, e.backend.RPCTxFeeCap()); err != nil {
+		return common.Hash{}, err
+	}
 
 	pending, err := e.backend.PendingTransactions()
 	if err != nil {
@@ -587,27 +594,31 @@ func (e *PublicAPI) doCall(
 		return nil, err
 	}
 
-	baseFee, err := e.backend.BaseFee()
-	if err != nil {
-		return nil, err
-	}
-
-	var bf *sdk.Int
-	if baseFee != nil {
-		aux := sdk.NewIntFromBigInt(baseFee)
-		bf = &aux
-	}
-
 	req := evmtypes.EthCallRequest{
-		Args:    bz,
-		GasCap:  e.backend.RPCGasCap(),
-		BaseFee: bf,
+		Args:   bz,
+		GasCap: e.backend.RPCGasCap(),
 	}
 
 	// From ContextWithHeight: if the provided height is 0,
 	// it will return an empty context and the gRPC query will use
 	// the latest block height for querying.
-	res, err := e.queryClient.EthCall(rpctypes.ContextWithHeight(blockNr.Int64()), &req)
+	ctx := rpctypes.ContextWithHeight(blockNr.Int64())
+	timeout := e.backend.RPCEVMTimeout()
+
+	// Setup context so it may be canceled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+
+	// Make sure the context is canceled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+
+	res, err := e.queryClient.EthCall(ctx, &req)
 	if err != nil {
 		return nil, err
 	}
@@ -680,7 +691,7 @@ func (e *PublicAPI) GetTransactionByBlockHashAndIndex(hash common.Hash, idx hexu
 		return nil, err
 	}
 
-	baseFee, err := e.backend.BaseFee()
+	baseFee, err := e.backend.BaseFee(resBlock.Block.Height)
 	if err != nil {
 		return nil, err
 	}
