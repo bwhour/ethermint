@@ -26,14 +26,15 @@ const (
 
 // JSON-RPC flags
 const (
-	JSONRPCEnable     = "json-rpc.enable"
-	JSONRPCAPI        = "json-rpc.api"
-	JSONRPCAddress    = "json-rpc.address"
-	JSONWsAddress     = "json-rpc.ws-address"
-	JSONRPCGasCap     = "json-rpc.gas-cap"
-	JSONRPCEVMTimeout = "json-rpc.evm-timeout"
-	JSONRPCTxFeeCap   = "json-rpc.txfee-cap"
-	JSONRPCFilterCap  = "json-rpc.filter-cap"
+	JSONRPCEnable       = "json-rpc.enable"
+	JSONRPCAPI          = "json-rpc.api"
+	JSONRPCAddress      = "json-rpc.address"
+	JSONWsAddress       = "json-rpc.ws-address"
+	JSONRPCGasCap       = "json-rpc.gas-cap"
+	JSONRPCEVMTimeout   = "json-rpc.evm-timeout"
+	JSONRPCTxFeeCap     = "json-rpc.txfee-cap"
+	JSONRPCFilterCap    = "json-rpc.filter-cap"
+	JSONRPFeeHistoryCap = "json-rpc.feehistory-cap"
 )
 
 // EVM flags
@@ -48,7 +49,7 @@ const (
 )
 
 // AddTxFlags adds common flags for commands to post tx
-func AddTxFlags(cmd *cobra.Command) *cobra.Command {
+func AddTxFlags(cmd *cobra.Command) (*cobra.Command, error) {
 	cmd.PersistentFlags().String(flags.FlagChainID, "testnet", "Specify Chain ID for sending Tx")
 	cmd.PersistentFlags().String(flags.FlagFrom, "", "Name or address of private key with which to sign")
 	cmd.PersistentFlags().String(flags.FlagFees, "", "Fees to pay along with transaction; eg: 10aphoton")
@@ -65,13 +66,11 @@ func AddTxFlags(cmd *cobra.Command) *cobra.Command {
 	// ))
 
 	// viper.BindPFlag(flags.FlagTrustNode, cmd.Flags().Lookup(flags.FlagTrustNode))
-
-	// TODO: we need to handle the errors for these, decide if we should return error upward and handle
-	// nolint: errcheck
-	viper.BindPFlag(flags.FlagNode, cmd.Flags().Lookup(flags.FlagNode))
-	// nolint: errcheck
-	viper.BindPFlag(flags.FlagKeyringBackend, cmd.Flags().Lookup(flags.FlagKeyringBackend))
-	// nolint: errcheck
-	cmd.MarkFlagRequired(flags.FlagChainID)
-	return cmd
+	if err := viper.BindPFlag(flags.FlagNode, cmd.PersistentFlags().Lookup(flags.FlagNode)); err != nil {
+		return nil, err
+	}
+	if err := viper.BindPFlag(flags.FlagKeyringBackend, cmd.PersistentFlags().Lookup(flags.FlagKeyringBackend)); err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
