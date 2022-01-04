@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cosmos/cosmos-sdk v0.44.5
 	github.com/cosmos/go-bip39 v1.0.0
-	github.com/cosmos/ibc-go/v2 v2.0.2
+	github.com/cosmos/ibc-go/v3 v3.0.0-alpha1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.10.11
 	github.com/gogo/protobuf v1.3.3
@@ -24,7 +24,7 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/regen-network/cosmos-proto v0.3.1
-	github.com/rs/cors v1.8.0
+	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.26.0 // indirect
 	github.com/spf13/cast v1.4.1
 	github.com/spf13/cobra v1.3.0
@@ -35,8 +35,8 @@ require (
 	github.com/tendermint/tm-db v0.6.4
 	github.com/tyler-smith/go-bip39 v1.1.0
 	go.etcd.io/bbolt v1.3.6 // indirect
-	golang.org/x/crypto v0.0.0-20211115234514-b4de73f9ece8 // indirect
-	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa
+	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
+	google.golang.org/genproto v0.0.0-20211223182754-3ac035c7e7cb
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -56,7 +56,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/coinbase/rosetta-sdk-go v0.6.10 // indirect
+	github.com/coinbase/rosetta-sdk-go v0.7.0 // indirect
 	github.com/confio/ics23/go v0.6.6 // indirect
 	github.com/cosmos/btcutil v1.0.4 // indirect
 	github.com/cosmos/iavl v0.17.3 // indirect
@@ -136,7 +136,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.7 // indirect
 	github.com/tklauser/numcpus v0.2.3 // indirect
 	github.com/zondax/hid v0.9.0 // indirect
-	golang.org/x/net v0.0.0-20211111160137-58aab5ef257a // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
@@ -155,3 +155,5 @@ replace google.golang.org/grpc => google.golang.org/grpc v1.33.2
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 replace github.com/99designs/keyring => github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76
+
+replace github.com/cosmos/cosmos-sdk => github.com/cosmos/cosmos-sdk v0.44.5-0.20211217105340-3f5e58181a93

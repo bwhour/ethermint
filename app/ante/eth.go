@@ -6,7 +6,6 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	tx "github.com/cosmos/cosmos-sdk/types/tx"
 	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 
 	ethermint "github.com/tharsis/ethermint/types"
@@ -14,29 +13,8 @@ import (
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
-
-// EVMKeeper defines the expected keeper interface used on the Eth AnteHandler
-type EVMKeeper interface {
-	vm.StateDB
-
-	ChainID() *big.Int
-	GetParams(ctx sdk.Context) evmtypes.Params
-	WithContext(ctx sdk.Context)
-	ResetRefundTransient(ctx sdk.Context)
-	NewEVM(msg core.Message, cfg *evmtypes.EVMConfig, tracer vm.Tracer) *vm.EVM
-	GetCodeHash(addr common.Address) common.Hash
-	DeductTxCostsFromUserBalance(
-		ctx sdk.Context, msgEthTx evmtypes.MsgEthereumTx, txData evmtypes.TxData, denom string, homestead, istanbul, london bool,
-	) (sdk.Coins, error)
-}
-
-type protoTxProvider interface {
-	GetProtoTx() *tx.Tx
-}
 
 // EthSigVerificationDecorator validates an ethereum signatures
 type EthSigVerificationDecorator struct {
@@ -326,8 +304,6 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 	ctd.evmKeeper.WithContext(ctx)
 
 	params := ctd.evmKeeper.GetParams(ctx)
-	feeMktParams := ctd.feemarketKeeper.GetParams(ctx)
-
 	ethCfg := params.ChainConfig.EthereumConfig(ctd.evmKeeper.ChainID())
 	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
 
@@ -337,10 +313,7 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type %T, expected %T", tx, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		var baseFee *big.Int
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) && !feeMktParams.NoBaseFee {
-			baseFee = ctd.feemarketKeeper.GetBaseFee(ctx)
-		}
+		baseFee := ctd.evmKeeper.BaseFee(ctx, ethCfg)
 
 		coreMsg, err := msgEthTx.AsMessage(signer, baseFee)
 		if err != nil {
@@ -370,16 +343,22 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 			)
 		}
 
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) && !feeMktParams.NoBaseFee && baseFee == nil {
-			return ctx, sdkerrors.Wrap(evmtypes.ErrInvalidBaseFee, "base fee is supported but evm block context value is nil")
-		}
-
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) && !feeMktParams.NoBaseFee && baseFee != nil && coreMsg.GasFeeCap().Cmp(baseFee) < 0 {
-			return ctx, sdkerrors.Wrapf(evmtypes.ErrInvalidBaseFee, "max fee per gas less than block base fee (%s < %s)", coreMsg.GasFeeCap(), baseFee)
+		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) {
+			if baseFee == nil {
+				return ctx, sdkerrors.Wrap(
+					evmtypes.ErrInvalidBaseFee,
+					"base fee is supported but evm block context value is nil",
+				)
+			}
+			if coreMsg.GasFeeCap().Cmp(baseFee) < 0 {
+				return ctx, sdkerrors.Wrapf(
+					evmtypes.ErrInvalidBaseFee,
+					"max fee per gas less than block base fee (%s < %s)",
+					coreMsg.GasFeeCap(), baseFee,
+				)
+			}
 		}
 	}
-
-	ctd.evmKeeper.WithContext(ctx)
 
 	// set the original gas meter
 	return next(ctx, tx, simulate)
@@ -402,24 +381,6 @@ func NewEthIncrementSenderSequenceDecorator(ak evmtypes.AccountKeeper) EthIncrem
 // this AnteHandler decorator.
 func (issd EthIncrementSenderSequenceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
 	for _, msg := range tx.GetMsgs() {
-		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
-		if !ok {
-			return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type %T, expected %T", tx, (*evmtypes.MsgEthereumTx)(nil))
-		}
-
-		txData, err := evmtypes.UnpackTxData(msgEthTx.Data)
-		if err != nil {
-			return ctx, sdkerrors.Wrap(err, "failed to unpack tx data")
-		}
-
-		// NOTE: on contract creation, the nonce is incremented within the EVM Create function during tx execution
-		// and not previous to the state transition ¯\_(ツ)_/¯
-		if txData.GetTo() == nil {
-			// contract creation, don't increment sequence on AnteHandler but on tx execution
-			// continue to the next item
-			continue
-		}
-
 		// increment sequence of all signers
 		for _, addr := range msg.GetSigners() {
 			acc := issd.ak.GetAccount(ctx, addr)
@@ -439,7 +400,6 @@ func (issd EthIncrementSenderSequenceDecorator) AnteHandle(ctx sdk.Context, tx s
 		}
 	}
 
-	// set the original gas meter
 	return next(ctx, tx, simulate)
 }
 
@@ -461,6 +421,8 @@ func (vbd EthValidateBasicDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simu
 	if ctx.IsReCheckTx() {
 		return next(ctx, tx, simulate)
 	}
+
+	vbd.evmKeeper.WithContext(ctx)
 
 	err := tx.ValidateBasic()
 	// ErrNoSignatures is fine with eth tx
@@ -496,7 +458,15 @@ func (vbd EthValidateBasicDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simu
 		if err != nil {
 			return ctx, sdkerrors.Wrap(err, "failed to unpack MsgEthereumTx Data")
 		}
+
 		params := vbd.evmKeeper.GetParams(ctx)
+		chainID := vbd.evmKeeper.ChainID()
+		ethCfg := params.ChainConfig.EthereumConfig(chainID)
+		baseFee := vbd.evmKeeper.BaseFee(ctx, ethCfg)
+		if baseFee == nil && txData.TxType() == ethtypes.DynamicFeeTxType {
+			return ctx, sdkerrors.Wrap(ethtypes.ErrTxTypeNotSupported, "dynamic fee tx not supported")
+		}
+
 		ethFeeAmount := sdk.Coins{sdk.NewCoin(params.EvmDenom, sdk.NewIntFromBigInt(txData.Fee()))}
 
 		authInfo := protoTx.AuthInfo
@@ -577,13 +547,12 @@ func (mfd EthMempoolFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulat
 
 		var feeAmt *big.Int
 
-		feeMktParams := mfd.feemarketKeeper.GetParams(ctx)
 		params := mfd.evmKeeper.GetParams(ctx)
 		chainID := mfd.evmKeeper.ChainID()
 		ethCfg := params.ChainConfig.EthereumConfig(chainID)
 		evmDenom := params.EvmDenom
-		if evmtypes.IsLondon(ethCfg, ctx.BlockHeight()) && !feeMktParams.NoBaseFee {
-			baseFee := mfd.feemarketKeeper.GetBaseFee(ctx)
+		baseFee := mfd.evmKeeper.BaseFee(ctx, ethCfg)
+		if baseFee != nil {
 			feeAmt = msg.GetEffectiveFee(baseFee)
 		} else {
 			feeAmt = msg.GetFee()

@@ -82,15 +82,15 @@ import (
 	upgradekeeper "github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 
-	"github.com/cosmos/ibc-go/v2/modules/apps/transfer"
-	ibctransferkeeper "github.com/cosmos/ibc-go/v2/modules/apps/transfer/keeper"
-	ibctransfertypes "github.com/cosmos/ibc-go/v2/modules/apps/transfer/types"
-	ibc "github.com/cosmos/ibc-go/v2/modules/core"
-	ibcclient "github.com/cosmos/ibc-go/v2/modules/core/02-client"
-	ibcclientclient "github.com/cosmos/ibc-go/v2/modules/core/02-client/client"
-	porttypes "github.com/cosmos/ibc-go/v2/modules/core/05-port/types"
-	ibchost "github.com/cosmos/ibc-go/v2/modules/core/24-host"
-	ibckeeper "github.com/cosmos/ibc-go/v2/modules/core/keeper"
+	"github.com/cosmos/ibc-go/v3/modules/apps/transfer"
+	ibctransferkeeper "github.com/cosmos/ibc-go/v3/modules/apps/transfer/keeper"
+	ibctransfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	ibc "github.com/cosmos/ibc-go/v3/modules/core"
+	ibcclient "github.com/cosmos/ibc-go/v3/modules/core/02-client"
+	ibcclientclient "github.com/cosmos/ibc-go/v3/modules/core/02-client/client"
+	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
+	ibchost "github.com/cosmos/ibc-go/v3/modules/core/24-host"
+	ibckeeper "github.com/cosmos/ibc-go/v3/modules/core/keeper"
 
 	// unnamed import of statik for swagger UI support
 	_ "github.com/tharsis/ethermint/client/docs/statik"
@@ -379,10 +379,11 @@ func NewEthermintApp(
 		app.AccountKeeper, app.BankKeeper, scopedTransferKeeper,
 	)
 	transferModule := transfer.NewAppModule(app.TransferKeeper)
+	transferIBCModule := transfer.NewIBCModule(app.TransferKeeper)
 
 	// Create static IBC router, add transfer route, then set and seal it
 	ibcRouter := porttypes.NewRouter()
-	ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferModule)
+	ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferIBCModule)
 	app.IBCKeeper.SetRouter(ibcRouter)
 
 	// create evidence keeper with router
@@ -512,14 +513,23 @@ func NewEthermintApp(
 	app.SetBeginBlocker(app.BeginBlocker)
 
 	// use Ethermint's custom AnteHandler
-	app.SetAnteHandler(
-		ante.NewAnteHandler(
-			app.AccountKeeper, app.BankKeeper, app.EvmKeeper, app.FeeGrantKeeper, app.IBCKeeper.ChannelKeeper,
-			app.FeeMarketKeeper,
-			encodingConfig.TxConfig.SignModeHandler(),
-		),
-	)
 
+	options := ante.HandlerOptions{
+		AccountKeeper:    app.AccountKeeper,
+		BankKeeper:       app.BankKeeper,
+		EvmKeeper:        app.EvmKeeper,
+		FeegrantKeeper:   app.FeeGrantKeeper,
+		IBCChannelKeeper: app.IBCKeeper.ChannelKeeper,
+		FeeMarketKeeper:  app.FeeMarketKeeper,
+		SignModeHandler:  encodingConfig.TxConfig.SignModeHandler(),
+		SigGasConsumer:   ante.DefaultSigVerificationGasConsumer,
+	}
+
+	if err := options.Validate(); err != nil {
+		panic(err)
+	}
+
+	app.SetAnteHandler(ante.NewAnteHandler(options))
 	app.SetEndBlocker(app.EndBlocker)
 
 	if loadLatest {
