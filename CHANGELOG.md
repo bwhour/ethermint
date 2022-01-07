@@ -52,20 +52,26 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (evm)  Reject invalid `MsgEthereumTx` wrapping tx
 * (evm)  Fix `SelfDestruct` opcode by deleting account code and state.
 * (feemarket) [tharsis#855](https://github.com/tharsis/ethermint/pull/855) consistent `BaseFee` check logic.
+* (evm) [tharsis#729](https://github.com/tharsis/ethermint/pull/729) Refactor EVM StateDB implementation.
 
 ### Improvements
 
+* (types) [tharsis#884](https://github.com/tharsis/ethermint/pull/884) Introduce a new `EthAccountI` interface for EVM-compatible account types.
 * (types) [tharsis#849](https://github.com/tharsis/ethermint/pull/849) Add `Type` function to distinguish EOAs from Contract accounts.
 * (evm) [tharsis#826](https://github.com/tharsis/ethermint/issues/826) Improve allocation of bytes of `tx.To` address.
 * (evm) [tharsis#827](https://github.com/tharsis/ethermint/issues/827) Speed up creation of event logs by using the slice insertion idiom with indices.
 * (ante) [tharsis#819](https://github.com/tharsis/ethermint/pull/819) remove redundant ante handlers
+* (app) [tharsis#873](https://github.com/tharsis/ethermint/pull/873) Validate code hash in GenesisAccount
 
 ### Bug Fixes
 
+* (evm) [tharsis#884](https://github.com/tharsis/ethermint/pull/884) Support multiple account types on the EVM `StateDB`.
 * (rpc) [tharsis#831](https://github.com/tharsis/ethermint/pull/831) Fix BaseFee value when height is specified.
 * (evm) [tharsis#838](https://github.com/tharsis/ethermint/pull/838) Fix splitting of trace.Memory into 32 chunks.
 * (rpc) [tharsis#860](https://github.com/tharsis/ethermint/pull/860) Fix `eth_getLogs` when specify blockHash without address/topics, and limit the response size.
 * (rpc) [tharsis#865](https://github.com/tharsis/ethermint/pull/865) Fix RPC Filter parameters being ignored
+* (evm) [tharsis#871](https://github.com/tharsis/ethermint/pull/871) Set correct nonce in `EthCall` and `EstimateGas` grpc query.
+* (rpc) [tharsis#878](https://github.com/tharsis/ethermint/pull/878) Workaround to make GetBlock RPC api report correct block gas used.
 
 ## [v0.9.0] - 2021-12-01
 
