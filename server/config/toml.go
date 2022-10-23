@@ -13,6 +13,9 @@ const DefaultConfigTemplate = `
 # Valid types are: json|struct|access_list|markdown
 tracer = "{{ .EVM.Tracer }}"
 
+# MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
+max-tx-gas-wanted = {{ .EVM.MaxTxGasWanted }}
+
 ###############################################################################
 ###                           JSON RPC Configuration                        ###
 ###############################################################################
@@ -52,6 +55,27 @@ logs-cap = {{ .JSONRPC.LogsCap }}
 
 # BlockRangeCap defines the max block range allowed for 'eth_getLogs' query.
 block-range-cap = {{ .JSONRPC.BlockRangeCap }}
+
+# HTTPTimeout is the read/write timeout of http json-rpc server.
+http-timeout = "{{ .JSONRPC.HTTPTimeout }}"
+
+# HTTPIdleTimeout is the idle timeout of http json-rpc server.
+http-idle-timeout = "{{ .JSONRPC.HTTPIdleTimeout }}"
+
+# AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
+# the node's RPC when the global parameter is disabled.
+allow-unprotected-txs = {{ .JSONRPC.AllowUnprotectedTxs }}
+
+# MaxOpenConnections sets the maximum number of simultaneous connections
+# for the server listener.
+max-open-connections = {{ .JSONRPC.MaxOpenConnections }}
+
+# EnableIndexer enables the custom transaction indexer for the EVM (ethereum transactions).
+enable-indexer = {{ .JSONRPC.EnableIndexer }}
+
+# MetricsAddress defines the EVM Metrics server address to bind to. Pass --metrics in CLI to enable
+# Prometheus metrics path: /debug/metrics/prometheus
+metrics-address = "{{ .JSONRPC.MetricsAddress }}"
 
 ###############################################################################
 ###                             TLS Configuration                           ###

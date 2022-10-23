@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/evmos/ethermint/tests"
 	"github.com/stretchr/testify/require"
-	"github.com/tharsis/ethermint/tests"
 )
 
 func TestIsEmptyHash(t *testing.T) {
@@ -76,6 +76,37 @@ func TestValidateAddress(t *testing.T) {
 
 	for _, tc := range testCases {
 		err := ValidateAddress(tc.address)
+
+		if tc.expError {
+			require.Error(t, err, tc.name)
+		} else {
+			require.NoError(t, err, tc.name)
+		}
+	}
+}
+
+func TestValidateNonZeroAddress(t *testing.T) {
+	testCases := []struct {
+		name     string
+		address  string
+		expError bool
+	}{
+		{
+			"empty string", "", true,
+		},
+		{
+			"invalid address", "0x", true,
+		},
+		{
+			"zero address", common.Address{}.String(), true,
+		},
+		{
+			"valid address", tests.GenerateAddress().Hex(), false,
+		},
+	}
+
+	for _, tc := range testCases {
+		err := ValidateNonZeroAddress(tc.address)
 
 		if tc.expError {
 			require.Error(t, err, tc.name)

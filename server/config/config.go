@@ -25,8 +25,13 @@ const (
 	// DefaultJSONRPCWsAddress is the default address the JSON-RPC WebSocket server binds to.
 	DefaultJSONRPCWsAddress = "0.0.0.0:8546"
 
+	// DefaultJsonRPCMetricsAddress is the default address the JSON-RPC Metrics server binds to.
+	DefaultJSONRPCMetricsAddress = "0.0.0.0:6065"
+
 	// DefaultEVMTracer is the default vm.Tracer type
 	DefaultEVMTracer = ""
+
+	DefaultMaxTxGasWanted = 0
 
 	DefaultGasCap uint64 = 25000000
 
@@ -41,6 +46,14 @@ const (
 	DefaultEVMTimeout = 5 * time.Second
 	// default 1.0 eth
 	DefaultTxFeeCap float64 = 1.0
+
+	DefaultHTTPTimeout = 30 * time.Second
+
+	DefaultHTTPIdleTimeout = 120 * time.Second
+	// DefaultAllowUnprotectedTxs value is false
+	DefaultAllowUnprotectedTxs = false
+	// DefaultMaxOpenConnections represents the amount of open connections (unlimited = 0)
+	DefaultMaxOpenConnections = 0
 )
 
 var evmTracers = []string{"json", "markdown", "struct", "access_list"}
@@ -60,6 +73,8 @@ type EVMConfig struct {
 	// Tracer defines vm.Tracer type that the EVM will use if the node is run in
 	// trace mode. Default: 'json'.
 	Tracer string `mapstructure:"tracer"`
+	// MaxTxGasWanted defines the gas wanted for each eth tx returned in ante handler in check tx mode.
+	MaxTxGasWanted uint64 `mapstructure:"max-tx-gas-wanted"`
 }
 
 // JSONRPCConfig defines configuration for the EVM RPC server.
@@ -86,6 +101,20 @@ type JSONRPCConfig struct {
 	LogsCap int32 `mapstructure:"logs-cap"`
 	// BlockRangeCap defines the max block range allowed for `eth_getLogs` query.
 	BlockRangeCap int32 `mapstructure:"block-range-cap"`
+	// HTTPTimeout is the read/write timeout of http json-rpc server.
+	HTTPTimeout time.Duration `mapstructure:"http-timeout"`
+	// HTTPIdleTimeout is the idle timeout of http json-rpc server.
+	HTTPIdleTimeout time.Duration `mapstructure:"http-idle-timeout"`
+	// AllowUnprotectedTxs restricts unprotected (non EIP155 signed) transactions to be submitted via
+	// the node's RPC when global parameter is disabled.
+	AllowUnprotectedTxs bool `mapstructure:"allow-unprotected-txs"`
+	// MaxOpenConnections sets the maximum number of simultaneous connections
+	// for the server listener.
+	MaxOpenConnections int `mapstructure:"max-open-connections"`
+	// EnableIndexer defines if enable the custom indexer service.
+	EnableIndexer bool `mapstructure:"enable-indexer"`
+	// MetricsAddress defines the metrics server to listen on
+	MetricsAddress string `mapstructure:"metrics-address"`
 }
 
 // TLSConfig defines the certificate and matching private key for the server.
@@ -144,7 +173,8 @@ func DefaultConfig() *Config {
 // DefaultEVMConfig returns the default EVM configuration
 func DefaultEVMConfig() *EVMConfig {
 	return &EVMConfig{
-		Tracer: DefaultEVMTracer,
+		Tracer:         DefaultEVMTracer,
+		MaxTxGasWanted: DefaultMaxTxGasWanted,
 	}
 }
 
@@ -170,17 +200,23 @@ func GetAPINamespaces() []string {
 // DefaultJSONRPCConfig returns an EVM config with the JSON-RPC API enabled by default
 func DefaultJSONRPCConfig() *JSONRPCConfig {
 	return &JSONRPCConfig{
-		Enable:        true,
-		API:           GetDefaultAPINamespaces(),
-		Address:       DefaultJSONRPCAddress,
-		WsAddress:     DefaultJSONRPCWsAddress,
-		GasCap:        DefaultGasCap,
-		EVMTimeout:    DefaultEVMTimeout,
-		TxFeeCap:      DefaultTxFeeCap,
-		FilterCap:     DefaultFilterCap,
-		FeeHistoryCap: DefaultFeeHistoryCap,
-		BlockRangeCap: DefaultBlockRangeCap,
-		LogsCap:       DefaultLogsCap,
+		Enable:              true,
+		API:                 GetDefaultAPINamespaces(),
+		Address:             DefaultJSONRPCAddress,
+		WsAddress:           DefaultJSONRPCWsAddress,
+		GasCap:              DefaultGasCap,
+		EVMTimeout:          DefaultEVMTimeout,
+		TxFeeCap:            DefaultTxFeeCap,
+		FilterCap:           DefaultFilterCap,
+		FeeHistoryCap:       DefaultFeeHistoryCap,
+		BlockRangeCap:       DefaultBlockRangeCap,
+		LogsCap:             DefaultLogsCap,
+		HTTPTimeout:         DefaultHTTPTimeout,
+		HTTPIdleTimeout:     DefaultHTTPIdleTimeout,
+		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
+		MaxOpenConnections:  DefaultMaxOpenConnections,
+		EnableIndexer:       false,
+		MetricsAddress:      DefaultJSONRPCMetricsAddress,
 	}
 }
 
@@ -214,7 +250,15 @@ func (c JSONRPCConfig) Validate() error {
 		return errors.New("JSON-RPC block range cap cannot be negative")
 	}
 
-	// TODO: validate APIs
+	if c.HTTPTimeout < 0 {
+		return errors.New("JSON-RPC HTTP timeout duration cannot be negative")
+	}
+
+	if c.HTTPIdleTimeout < 0 {
+		return errors.New("JSON-RPC HTTP idle timeout duration cannot be negative")
+	}
+
+	// check for duplicates
 	seenAPIs := make(map[string]bool)
 	for _, api := range c.API {
 		if seenAPIs[api] {
@@ -253,32 +297,41 @@ func (c TLSConfig) Validate() error {
 }
 
 // GetConfig returns a fully parsed Config object.
-func GetConfig(v *viper.Viper) Config {
-	cfg := config.GetConfig(v)
+func GetConfig(v *viper.Viper) (Config, error) {
+	cfg, err := config.GetConfig(v)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
 		Config: cfg,
 		EVM: EVMConfig{
-			Tracer: v.GetString("evm.tracer"),
+			Tracer:         v.GetString("evm.tracer"),
+			MaxTxGasWanted: v.GetUint64("evm.max-tx-gas-wanted"),
 		},
 		JSONRPC: JSONRPCConfig{
-			Enable:        v.GetBool("json-rpc.enable"),
-			API:           v.GetStringSlice("json-rpc.api"),
-			Address:       v.GetString("json-rpc.address"),
-			WsAddress:     v.GetString("json-rpc.ws-address"),
-			GasCap:        v.GetUint64("json-rpc.gas-cap"),
-			FilterCap:     v.GetInt32("json-rpc.filter-cap"),
-			FeeHistoryCap: v.GetInt32("json-rpc.feehistory-cap"),
-			TxFeeCap:      v.GetFloat64("json-rpc.txfee-cap"),
-			EVMTimeout:    v.GetDuration("json-rpc.evm-timeout"),
-			LogsCap:       v.GetInt32("json-rpc.logs-cap"),
-			BlockRangeCap: v.GetInt32("json-rpc.block-range-cap"),
+			Enable:             v.GetBool("json-rpc.enable"),
+			API:                v.GetStringSlice("json-rpc.api"),
+			Address:            v.GetString("json-rpc.address"),
+			WsAddress:          v.GetString("json-rpc.ws-address"),
+			GasCap:             v.GetUint64("json-rpc.gas-cap"),
+			FilterCap:          v.GetInt32("json-rpc.filter-cap"),
+			FeeHistoryCap:      v.GetInt32("json-rpc.feehistory-cap"),
+			TxFeeCap:           v.GetFloat64("json-rpc.txfee-cap"),
+			EVMTimeout:         v.GetDuration("json-rpc.evm-timeout"),
+			LogsCap:            v.GetInt32("json-rpc.logs-cap"),
+			BlockRangeCap:      v.GetInt32("json-rpc.block-range-cap"),
+			HTTPTimeout:        v.GetDuration("json-rpc.http-timeout"),
+			HTTPIdleTimeout:    v.GetDuration("json-rpc.http-idle-timeout"),
+			MaxOpenConnections: v.GetInt("json-rpc.max-open-connections"),
+			EnableIndexer:      v.GetBool("json-rpc.enable-indexer"),
+			MetricsAddress:     v.GetString("json-rpc.metrics-address"),
 		},
 		TLS: TLSConfig{
 			CertificatePath: v.GetString("tls.certificate-path"),
 			KeyPath:         v.GetString("tls.key-path"),
 		},
-	}
+	}, nil
 }
 
 // ParseConfig retrieves the default environment configuration for the
