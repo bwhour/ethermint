@@ -275,6 +275,7 @@ TraceConfig holds extra parameters to trace functions.
 | `overrides` | [ChainConfig](#ethermint.evm.v1.ChainConfig) |  | Chain overrides, can be used to execute a trace using future fork rules |
 | `enable_memory` | [bool](#bool) |  | enable memory capture |
 | `enable_return_data` | [bool](#bool) |  | enable return data capture |
+| `tracer_json_config` | [string](#string) |  | tracer config |
 
 
 
@@ -285,7 +286,7 @@ TraceConfig holds extra parameters to trace functions.
 
 ### TransactionLogs
 TransactionLogs define the logs generated from a transaction execution
-with a given hash. It it used for import/export data as transactions are not
+with a given hash. It is used for import/export data as transactions are not
 persisted on blockchain state after an upgrade.
 
 
@@ -339,7 +340,7 @@ TxResult stores results of Tx execution.
 
 ### GenesisAccount
 GenesisAccount defines an account to be initialized in the genesis state.
-Its main difference between with Geth's GenesisAccount is that it uses a
+Its main difference with Geth's GenesisAccount is that it uses a
 custom storage type and that it doesn't contain the private key field.
 
 
@@ -414,7 +415,7 @@ AccessListTx is the data of EIP-2930 access list transactions.
 <a name="ethermint.evm.v1.DynamicFeeTx"></a>
 
 ### DynamicFeeTx
-DynamicFeeTx is the data of EIP-1559 dinamic fee transactions.
+DynamicFeeTx is the data of EIP-1559 dynamic fee transactions.
 
 
 | Field | Type | Label | Description |
@@ -425,7 +426,7 @@ DynamicFeeTx is the data of EIP-1559 dinamic fee transactions.
 | `gas_fee_cap` | [string](#string) |  | gas fee cap defines the max value for the gas fee |
 | `gas` | [uint64](#uint64) |  | gas defines the gas limit defined for the transaction. |
 | `to` | [string](#string) |  | hex formatted address of the recipient |
-| `value` | [string](#string) |  | value defines the the transaction amount. |
+| `value` | [string](#string) |  | value defines the transaction amount. |
 | `data` | [bytes](#bytes) |  | input defines the data payload bytes of the transaction. |
 | `accesses` | [AccessTuple](#ethermint.evm.v1.AccessTuple) | repeated |  |
 | `v` | [bytes](#bytes) |  | v defines the signature value |
@@ -563,6 +564,7 @@ EthCallRequest defines EthCall request
 | `args` | [bytes](#bytes) |  | same json format as the json rpc api. |
 | `gas_cap` | [uint64](#uint64) |  | the default gas cap to be used |
 | `proposer_address` | [bytes](#bytes) |  | the proposer of the requested block |
+| `chain_id` | [int64](#int64) |  | the eip155 chain id parsed from the requested block header |
 
 
 
@@ -715,7 +717,7 @@ RPC method.
 | ----- | ---- | ----- | ----------- |
 | `cosmos_address` | [string](#string) |  | cosmos_address is the cosmos address of the account. |
 | `sequence` | [uint64](#uint64) |  | sequence is the account's sequence number. |
-| `account_number` | [uint64](#uint64) |  | account_number is the account numbert |
+| `account_number` | [uint64](#uint64) |  | account_number is the account number. |
 
 
 
@@ -793,6 +795,7 @@ QueryTraceBlockRequest defines TraceTx request
 | `block_hash` | [string](#string) |  | block hex hash |
 | `block_time` | [google.protobuf.Timestamp](#google.protobuf.Timestamp) |  | block time |
 | `proposer_address` | [bytes](#bytes) |  | the proposer of the requested block |
+| `chain_id` | [int64](#int64) |  | the eip155 chain id parsed from the requested block header |
 
 
 
@@ -829,6 +832,7 @@ QueryTraceTxRequest defines TraceTx request
 | `block_hash` | [string](#string) |  | block hex hash of requested transaction |
 | `block_time` | [google.protobuf.Timestamp](#google.protobuf.Timestamp) |  | block time of requested transaction |
 | `proposer_address` | [bytes](#bytes) |  | the proposer of the requested block |
+| `chain_id` | [int64](#int64) |  | the eip155 chain id parsed from the requested block header |
 
 
 

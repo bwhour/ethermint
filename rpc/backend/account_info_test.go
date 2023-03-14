@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	tmrpcclient "github.com/tendermint/tendermint/rpc/client"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/evmos/ethermint/rpc/backend/mocks"
 	rpctypes "github.com/evmos/ethermint/rpc/types"
@@ -104,6 +105,18 @@ func (suite *BackendTestSuite) TestGetProof() {
 			&rpctypes.AccountResult{},
 		},
 		{
+			"fail - Block doesn't exist)",
+			address1,
+			[]string{},
+			rpctypes.BlockNumberOrHash{BlockNumber: &blockNrInvalid},
+			func(bn rpctypes.BlockNumber, addr common.Address) {
+				client := suite.backend.clientCtx.Client.(*mocks.Client)
+				RegisterBlockError(client, bn.Int64())
+			},
+			false,
+			&rpctypes.AccountResult{},
+		},
+		{
 			"pass",
 			address1,
 			[]string{"0x0"},
@@ -117,20 +130,20 @@ func (suite *BackendTestSuite) TestGetProof() {
 				RegisterAccount(queryClient, addr, bn.Int64())
 
 				// Use the IAVL height if a valid tendermint height is passed in.
-				ivalHeight := bn.Int64() - 1
+				iavlHeight := bn.Int64()
 				RegisterABCIQueryWithOptions(
 					client,
 					bn.Int64(),
 					"store/evm/key",
 					evmtypes.StateKey(address1, common.HexToHash("0x0").Bytes()),
-					tmrpcclient.ABCIQueryOptions{Height: ivalHeight, Prove: true},
+					tmrpcclient.ABCIQueryOptions{Height: iavlHeight, Prove: true},
 				)
 				RegisterABCIQueryWithOptions(
 					client,
 					bn.Int64(),
 					"store/acc/key",
 					authtypes.AddressStoreKey(sdk.AccAddress(address1.Bytes())),
-					tmrpcclient.ABCIQueryOptions{Height: ivalHeight, Prove: true},
+					tmrpcclient.ABCIQueryOptions{Height: iavlHeight, Prove: true},
 				)
 			},
 			true,
@@ -347,10 +360,47 @@ func (suite *BackendTestSuite) TestGetTransactionCount() {
 			"pass - account doesn't exist",
 			false,
 			rpctypes.NewBlockNumber(big.NewInt(1)),
-			func(addr common.Address, bn rpctypes.BlockNumber) {},
+			func(addr common.Address, bn rpctypes.BlockNumber) {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, 1)
+			},
 			true,
 			hexutil.Uint64(0),
 		},
+		{
+			"fail - block height is in the future",
+			false,
+			rpctypes.NewBlockNumber(big.NewInt(10000)),
+			func(addr common.Address, bn rpctypes.BlockNumber) {
+				var header metadata.MD
+				queryClient := suite.backend.queryClient.QueryClient.(*mocks.EVMQueryClient)
+				RegisterParams(queryClient, &header, 1)
+			},
+			false,
+			hexutil.Uint64(0),
+		},
+		// TODO: Error mocking the GetAccount call - problem with Any type
+		//{
+		//	"pass - returns the number of transactions at the given address up to the given block number",
+		//	true,
+		//	rpctypes.NewBlockNumber(big.NewInt(1)),
+		//	func(addr common.Address, bn rpctypes.BlockNumber) {
+		//		client := suite.backend.clientCtx.Client.(*mocks.Client)
+		//		account, err := suite.backend.clientCtx.AccountRetriever.GetAccount(suite.backend.clientCtx, suite.acc)
+		//		suite.Require().NoError(err)
+		//		request := &authtypes.QueryAccountRequest{Address: sdk.AccAddress(suite.acc.Bytes()).String()}
+		//		requestMarshal, _ := request.Marshal()
+		//		RegisterABCIQueryAccount(
+		//			client,
+		//			requestMarshal,
+		//			tmrpcclient.ABCIQueryOptions{Height: int64(1), Prove: false},
+		//			account,
+		//		)
+		//	},
+		//	true,
+		//	hexutil.Uint64(0),
+		//},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.name), func() {

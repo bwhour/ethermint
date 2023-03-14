@@ -1,3 +1,18 @@
+// Copyright 2021 Evmos Foundation
+// This file is part of Evmos' Ethermint library.
+//
+// The Ethermint library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Ethermint library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package backend
 
 import (
@@ -10,9 +25,12 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -21,6 +39,7 @@ import (
 
 	"github.com/evmos/ethermint/rpc/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/tendermint/tendermint/proto/tendermint/crypto"
 )
 
 type txGasAndReward struct {
@@ -45,8 +64,15 @@ func (s sortGasAndReward) Less(i, j int) bool {
 // Todo: include the ability to specify a blockNumber
 func (b *Backend) getAccountNonce(accAddr common.Address, pending bool, height int64, logger log.Logger) (uint64, error) {
 	queryClient := authtypes.NewQueryClient(b.clientCtx)
-	res, err := queryClient.Account(types.ContextWithHeight(height), &authtypes.QueryAccountRequest{Address: sdk.AccAddress(accAddr.Bytes()).String()})
+	adr := sdk.AccAddress(accAddr.Bytes()).String()
+	ctx := types.ContextWithHeight(height)
+	res, err := queryClient.Account(ctx, &authtypes.QueryAccountRequest{Address: adr})
 	if err != nil {
+		st, ok := status.FromError(err)
+		// treat as account doesn't exist yet
+		if ok && st.Code() == codes.NotFound {
+			return 0, nil
+		}
 		return 0, err
 	}
 	var acc authtypes.AccountI
@@ -107,7 +133,12 @@ func (b *Backend) processBlock(
 
 	// set basefee
 	targetOneFeeHistory.BaseFee = blockBaseFee
-
+	cfg := b.ChainConfig()
+	if cfg.IsLondon(big.NewInt(blockHeight + 1)) {
+		targetOneFeeHistory.NextBaseFee = misc.CalcBaseFee(cfg, b.CurrentHeader())
+	} else {
+		targetOneFeeHistory.NextBaseFee = new(big.Int)
+	}
 	// set gas used ratio
 	gasLimitUint64, ok := (*ethBlock)["gasLimit"].(hexutil.Uint64)
 	if !ok {
@@ -260,6 +291,22 @@ func GetLogsFromBlockResults(blockRes *tmrpctypes.ResultBlockResults) ([][]*etht
 
 		blockLogs = append(blockLogs, logs...)
 	}
-
 	return blockLogs, nil
+}
+
+// GetHexProofs returns list of hex data of proof op
+func GetHexProofs(proof *crypto.ProofOps) []string {
+	if proof == nil {
+		return []string{""}
+	}
+	proofs := []string{}
+	// check for proof
+	for _, p := range proof.Ops {
+		proof := ""
+		if len(p.Data) > 0 {
+			proof = hexutil.Encode(p.Data)
+		}
+		proofs = append(proofs, proof)
+	}
+	return proofs
 }

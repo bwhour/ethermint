@@ -1,8 +1,9 @@
 package keeper_test
 
 import (
-	"github.com/evmos/ethermint/x/evm/types"
 	"reflect"
+
+	"github.com/evmos/ethermint/x/evm/types"
 )
 
 func (suite *KeeperTestSuite) TestParams() {
@@ -32,7 +33,8 @@ func (suite *KeeperTestSuite) TestParams() {
 				return params.EvmDenom
 			},
 			func() interface{} {
-				return suite.app.EvmKeeper.GetEVMDenom(suite.ctx)
+				evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+				return evmParams.GetEvmDenom()
 			},
 			true,
 		},
@@ -44,7 +46,8 @@ func (suite *KeeperTestSuite) TestParams() {
 				return params.EnableCreate
 			},
 			func() interface{} {
-				return suite.app.EvmKeeper.GetEnableCreate(suite.ctx)
+				evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+				return evmParams.GetEnableCreate()
 			},
 			true,
 		},
@@ -56,7 +59,8 @@ func (suite *KeeperTestSuite) TestParams() {
 				return params.EnableCall
 			},
 			func() interface{} {
-				return suite.app.EvmKeeper.GetEnableCall(suite.ctx)
+				evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+				return evmParams.GetEnableCall()
 			},
 			true,
 		},
@@ -68,7 +72,8 @@ func (suite *KeeperTestSuite) TestParams() {
 				return params.AllowUnprotectedTxs
 			},
 			func() interface{} {
-				return suite.app.EvmKeeper.GetAllowUnprotectedTxs(suite.ctx)
+				evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+				return evmParams.GetAllowUnprotectedTxs()
 			},
 			true,
 		},
@@ -80,7 +85,8 @@ func (suite *KeeperTestSuite) TestParams() {
 				return params.ChainConfig
 			},
 			func() interface{} {
-				return suite.app.EvmKeeper.GetChainConfig(suite.ctx)
+				evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+				return evmParams.GetChainConfig()
 			},
 			true,
 		},
@@ -91,5 +97,4 @@ func (suite *KeeperTestSuite) TestParams() {
 			suite.Require().Equal(tc.expected, outcome)
 		})
 	}
-
 }

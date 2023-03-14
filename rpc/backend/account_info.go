@@ -1,3 +1,18 @@
+// Copyright 2021 Evmos Foundation
+// This file is part of Evmos' Ethermint library.
+//
+// The Ethermint library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The Ethermint library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package backend
 
 import (
@@ -5,8 +20,10 @@ import (
 	"math"
 	"math/big"
 
+	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -75,16 +92,10 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 			return nil, err
 		}
 
-		// check for proof
-		var proofStr string
-		if proof != nil {
-			proofStr = proof.String()
-		}
-
 		storageProofs[i] = rpctypes.StorageResult{
 			Key:   key,
 			Value: (*hexutil.Big)(new(big.Int).SetBytes(valueBz)),
-			Proof: []string{proofStr},
+			Proof: GetHexProofs(proof),
 		}
 	}
 
@@ -105,12 +116,6 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 		return nil, err
 	}
 
-	// check for proof
-	var accProofStr string
-	if proof != nil {
-		accProofStr = proof.String()
-	}
-
 	balance, ok := sdkmath.NewIntFromString(res.Balance)
 	if !ok {
 		return nil, errors.New("invalid balance")
@@ -118,7 +123,7 @@ func (b *Backend) GetProof(address common.Address, storageKeys []string, blockNr
 
 	return &rpctypes.AccountResult{
 		Address:      address,
-		AccountProof: []string{accProofStr},
+		AccountProof: GetHexProofs(proof),
 		Balance:      (*hexutil.Big)(balance.BigInt()),
 		CodeHash:     common.HexToHash(res.CodeHash),
 		Nonce:        hexutil.Uint64(res.Nonce),
@@ -184,14 +189,27 @@ func (b *Backend) GetBalance(address common.Address, blockNrOrHash rpctypes.Bloc
 
 // GetTransactionCount returns the number of transactions at the given address up to the given block number.
 func (b *Backend) GetTransactionCount(address common.Address, blockNum rpctypes.BlockNumber) (*hexutil.Uint64, error) {
+	n := hexutil.Uint64(0)
+	bn, err := b.BlockNumber()
+	if err != nil {
+		return &n, err
+	}
+	height := blockNum.Int64()
+	currentHeight := int64(bn)
+	if height > currentHeight {
+		return &n, errorsmod.Wrapf(
+			sdkerrors.ErrInvalidHeight,
+			"cannot query with height in the future (current: %d, queried: %d); please provide a valid height",
+			currentHeight, height,
+		)
+	}
 	// Get nonce (sequence) from account
 	from := sdk.AccAddress(address.Bytes())
 	accRet := b.clientCtx.AccountRetriever
 
-	err := accRet.EnsureExists(b.clientCtx, from)
+	err = accRet.EnsureExists(b.clientCtx, from)
 	if err != nil {
 		// account doesn't exist yet, return 0
-		n := hexutil.Uint64(0)
 		return &n, nil
 	}
 
@@ -201,6 +219,6 @@ func (b *Backend) GetTransactionCount(address common.Address, blockNum rpctypes.
 		return nil, err
 	}
 
-	n := hexutil.Uint64(nonce)
+	n = hexutil.Uint64(nonce)
 	return &n, nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -77,6 +78,9 @@ type KeeperTestSuite struct {
 var s *KeeperTestSuite
 
 func TestKeeperTestSuite(t *testing.T) {
+	if os.Getenv("benchmark") != "" {
+		t.Skip("Skipping Gingko Test")
+	}
 	s = new(KeeperTestSuite)
 	s.enableFeemarket = false
 	s.enableLondonHF = true
@@ -93,9 +97,18 @@ func (suite *KeeperTestSuite) SetupTest() {
 	suite.SetupApp(checkTx)
 }
 
-// SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
+func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
+	checkTx := false
+	suite.app = app.Setup(checkTx, nil)
+	suite.SetupAppWithT(checkTx, t)
+}
+
 func (suite *KeeperTestSuite) SetupApp(checkTx bool) {
-	t := suite.T()
+	suite.SetupAppWithT(checkTx, suite.T())
+}
+
+// SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
+func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
@@ -126,6 +139,8 @@ func (suite *KeeperTestSuite) SetupApp(checkTx bool) {
 			evmGenesis.Params.ChainConfig.ArrowGlacierBlock = &maxInt
 			evmGenesis.Params.ChainConfig.GrayGlacierBlock = &maxInt
 			evmGenesis.Params.ChainConfig.MergeNetsplitBlock = &maxInt
+			evmGenesis.Params.ChainConfig.ShanghaiBlock = &maxInt
+			evmGenesis.Params.ChainConfig.CancunBlock = &maxInt
 			genesis[types.ModuleName] = app.AppCodec().MustMarshalJSON(evmGenesis)
 		}
 		return genesis
@@ -478,10 +493,8 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 				i++
 				return false
 			})
-
 		})
 	}
-
 }
 
 func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
@@ -518,7 +531,6 @@ func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
 			} else {
 				suite.Require().NotEqual(empty, res)
 			}
-
 		})
 	}
 }

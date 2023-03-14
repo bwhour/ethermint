@@ -540,7 +540,8 @@ func (suite *KeeperTestSuite) TestEstimateGas() {
 			"enough balance",
 			func() {
 				args = types.TransactionArgs{To: &common.Address{}, From: &suite.address, Value: (*hexutil.Big)(big.NewInt(100))}
-			}, false, 0, false},
+			}, false, 0, false,
+		},
 		// should success, because gas limit lower than 21000 is ignored
 		{
 			"gas exceed allowance",
@@ -758,6 +759,7 @@ func (suite *KeeperTestSuite) TestTraceTx() {
 		txMsg        *types.MsgEthereumTx
 		traceConfig  *types.TraceConfig
 		predecessors []*types.MsgEthereumTx
+		chainID      *sdkmath.Int
 	)
 
 	testCases := []struct {
@@ -887,18 +889,6 @@ func (suite *KeeperTestSuite) TestTraceTx() {
 			expPass: false,
 		},
 		{
-			msg: "trace config - Execution Timeout",
-			malleate: func() {
-				traceConfig = &types.TraceConfig{
-					DisableStack:   true,
-					DisableStorage: true,
-					EnableMemory:   false,
-					Timeout:        "0s",
-				}
-			},
-			expPass: false,
-		},
-		{
 			msg: "default tracer with contract creation tx as predecessor but 'create' param disabled",
 			malleate: func() {
 				traceConfig = nil
@@ -932,6 +922,16 @@ func (suite *KeeperTestSuite) TestTraceTx() {
 			expPass:       true,
 			traceResponse: "{\"gas\":34828,\"failed\":false,\"returnValue\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"structLogs\":[{\"pc\":0,\"op\":\"PUSH1\",\"gas\":",
 		},
+		{
+			msg: "invalid chain id",
+			malleate: func() {
+				traceConfig = nil
+				predecessors = []*types.MsgEthereumTx{}
+				tmp := sdkmath.NewInt(1)
+				chainID = &tmp
+			},
+			expPass: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -951,6 +951,10 @@ func (suite *KeeperTestSuite) TestTraceTx() {
 				TraceConfig:  traceConfig,
 				Predecessors: predecessors,
 			}
+
+			if chainID != nil {
+				traceReq.ChainId = chainID.Int64()
+			}
 			res, err := suite.queryClient.TraceTx(sdk.WrapSDKContext(suite.ctx), &traceReq)
 
 			if tc.expPass {
@@ -969,6 +973,8 @@ func (suite *KeeperTestSuite) TestTraceTx() {
 			} else {
 				suite.Require().Error(err)
 			}
+			// Reset for next test case
+			chainID = nil
 		})
 	}
 
@@ -979,6 +985,7 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 	var (
 		txs         []*types.MsgEthereumTx
 		traceConfig *types.TraceConfig
+		chainID     *sdkmath.Int
 	)
 
 	testCases := []struct {
@@ -1088,7 +1095,17 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 				}
 			},
 			expPass:       true,
-			traceResponse: "[]",
+			traceResponse: "[{\"error\":\"rpc error: code = Internal desc = tracer not found\"}]",
+		},
+		{
+			msg: "invalid chain id",
+			malleate: func() {
+				traceConfig = nil
+				tmp := sdkmath.NewInt(1)
+				chainID = &tmp
+			},
+			expPass:       true,
+			traceResponse: "[{\"error\":\"rpc error: code = Internal desc = invalid chain id for signer\"}]",
 		},
 	}
 
@@ -1111,6 +1128,11 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 				Txs:         txs,
 				TraceConfig: traceConfig,
 			}
+
+			if chainID != nil {
+				traceReq.ChainId = chainID.Int64()
+			}
+
 			res, err := suite.queryClient.TraceBlock(sdk.WrapSDKContext(suite.ctx), &traceReq)
 
 			if tc.expPass {
@@ -1124,6 +1146,8 @@ func (suite *KeeperTestSuite) TestTraceBlock() {
 			} else {
 				suite.Require().Error(err)
 			}
+			// Reset for next case
+			chainID = nil
 		})
 	}
 
@@ -1140,6 +1164,8 @@ func (suite *KeeperTestSuite) TestNonceInQuery() {
 
 	// do an EthCall/EstimateGas with nonce 0
 	ctorArgs, err := types.ERC20Contract.ABI.Pack("", address, supply)
+	suite.Require().NoError(err)
+
 	data := append(types.ERC20Contract.Bin, ctorArgs...)
 	args, err := json.Marshal(&types.TransactionArgs{
 		From: &address,
@@ -1236,9 +1262,7 @@ func (suite *KeeperTestSuite) TestQueryBaseFee() {
 }
 
 func (suite *KeeperTestSuite) TestEthCall() {
-	var (
-		req *types.EthCallRequest
-	)
+	var req *types.EthCallRequest
 
 	address := tests.GenerateAddress()
 	suite.Require().Equal(uint64(0), suite.app.EvmKeeper.GetNonce(suite.ctx, address))
@@ -1309,7 +1333,6 @@ func (suite *KeeperTestSuite) TestEthCall() {
 			}
 		})
 	}
-
 }
 
 func (suite *KeeperTestSuite) TestEmptyRequest() {

@@ -1,9 +1,17 @@
 import sys
 
-from .network import Ethermint
+import pytest
+
+from .network import setup_ethermint
 from .utils import ADDRS, KEYS, eth_to_bech32, sign_transaction, wait_for_new_blocks
 
 PRIORITY_REDUCTION = 1000000
+
+
+@pytest.fixture(scope="module")
+def custom_ethermint(tmp_path_factory):
+    path = tmp_path_factory.mktemp("priority")
+    yield from setup_ethermint(path, 26800, long_timeout_commit=True)
 
 
 def effective_gas_price(tx, base_fee):
@@ -27,7 +35,7 @@ def tx_priority(tx, base_fee):
         return (tx["gasPrice"] - base_fee) // PRIORITY_REDUCTION
 
 
-def test_priority(ethermint: Ethermint):
+def test_priority(ethermint):
     """
     test priorities of different tx types
 
@@ -112,7 +120,7 @@ def test_priority(ethermint: Ethermint):
     assert all(i1 > i2 for i1, i2 in zip(tx_indexes, tx_indexes[1:]))
 
 
-def test_native_tx_priority(ethermint: Ethermint):
+def test_native_tx_priority(ethermint):
     cli = ethermint.cosmos_cli()
     base_fee = cli.query_base_fee()
     print("base_fee", base_fee)
@@ -184,7 +192,10 @@ def test_native_tx_priority(ethermint: Ethermint):
     tx_indexes = [(int(r["height"]), r["index"]) for r in tx_results]
     print(tx_indexes)
     # the first sent tx are included later, because of lower priority
-    assert all(i1 > i2 for i1, i2 in zip(tx_indexes, tx_indexes[1:]))
+    # ensure desc within continuous block
+    assert all((
+        b1 < b2 or (b1 == b2 and i1 > i2)
+    ) for (b1, i1), (b2, i2) in zip(tx_indexes, tx_indexes[1:]))
 
 
 def get_max_priority_price(max_priority_price):

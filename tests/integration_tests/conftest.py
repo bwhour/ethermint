@@ -1,8 +1,6 @@
-from pathlib import Path
-
 import pytest
 
-from .network import setup_custom_ethermint, setup_ethermint, setup_geth
+from .network import setup_ethermint, setup_geth
 
 
 @pytest.fixture(scope="session")
@@ -12,36 +10,24 @@ def ethermint(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def ethermint_indexer(tmp_path_factory):
-    path = tmp_path_factory.mktemp("indexer")
-    yield from setup_custom_ethermint(
-        path, 26660, Path(__file__).parent / "configs/enable-indexer.jsonnet"
-    )
-
-
-@pytest.fixture(scope="session")
 def geth(tmp_path_factory):
     path = tmp_path_factory.mktemp("geth")
     yield from setup_geth(path, 8545)
 
 
 @pytest.fixture(
-    scope="session", params=["ethermint", "geth", "ethermint-ws", "enable-indexer"]
+    scope="session", params=["ethermint", "ethermint-ws"]
 )
-def cluster(request, ethermint, ethermint_indexer, geth):
+def ethermint_rpc_ws(request, ethermint):
     """
-    run on both ethermint and geth
+    run on both ethermint and ethermint websocket
     """
     provider = request.param
     if provider == "ethermint":
         yield ethermint
-    elif provider == "geth":
-        yield geth
     elif provider == "ethermint-ws":
         ethermint_ws = ethermint.copy()
         ethermint_ws.use_websocket()
         yield ethermint_ws
-    elif provider == "enable-indexer":
-        yield ethermint_indexer
     else:
         raise NotImplementedError
