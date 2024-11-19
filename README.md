@@ -11,10 +11,10 @@ parent:
 
 <div align="center">
   <a href="https://github.com/evmos/ethermint/releases/latest">
-    <img alt="Version" src="https://img.shields.io/github/tag/tharsis/ethermint.svg" />
+    <img alt="Version" src="https://img.shields.io/github/tag/evmos/ethermint.svg" />
   </a>
   <a href="https://github.com/evmos/ethermint/blob/main/LICENSE">
-    <img alt="License: Apache-2.0" src="https://img.shields.io/github/license/tharsis/ethermint.svg" />
+    <img alt="License: LGPL-v3" src="https://img.shields.io/github/license/evmos/ethermint.svg" />
   </a>
   <a href="https://pkg.go.dev/github.com/evmos/ethermint">
     <img alt="GoDoc" src="https://godoc.org/github.com/evmos/ethermint?status.svg" />
@@ -23,7 +23,7 @@ parent:
     <img alt="Go report card" src="https://goreportcard.com/badge/github.com/evmos/ethermint"/>
   </a>
   <a href="https://bestpractices.coreinfrastructure.org/projects/5018">
-    <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/tharsis/ethermint">
+    <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/evmos/ethermint">
   </a>
 </div>
 <div align="center">
@@ -34,45 +34,34 @@ parent:
     <img alt="Lint Status" src="https://github.com/evmos/ethermint/actions/workflows/lint.yml/badge.svg?branch=main" />
   </a>
   <a href="https://codecov.io/gh/tharsis/ethermint">
-    <img alt="Code Coverage" src="https://codecov.io/gh/tharsis/ethermint/branch/main/graph/badge.svg" />
+    <img alt="Code Coverage" src="https://codecov.io/gh/evmos/ethermint/branch/main/graph/badge.svg" />
   </a>
 </div>
 
+> [!WARNING] 
+> Evmos, the team behind Ethermint, has fully shifted its focus to [Evmos](https://github.com/evmos/evmos), where we
+> continue to build interoperability solutions for the future!
+> As a result, this repository is no longer maintained for that reason and all relevant code has been migrated.
+>
+> **NOTE: If you are interested in using this software** email us at [os@evmos.org](mailto:os@evmos.org) with copy to [legal@thars.is](mailto:legal@thars.is)
+
+## About 
+
 Ethermint is a scalable and interoperable Ethereum library, built on Proof-of-Stake with fast-finality using the [Cosmos SDK](https://github.com/cosmos/cosmos-sdk/) which runs on top of [Tendermint Core](https://github.com/tendermint/tendermint) consensus engine.
 
-**Note**: Requires [Go 1.19+](https://golang.org/dl/)
+## Careers
 
-## Installation
+See our open positions on [Evmos Careers](https://evmos.org/careers).
 
-For prerequisites and detailed build instructions please read the Evmos [Installation](https://docs.evmos.org/validators/quickstart/installation.html) instructions. Once the dependencies are installed, run:
-
-```bash
-make install
-```
-
-Or check out the latest [release](https://github.com/evmos/ethermint/releases).
-
-## Quick Start
-
-To learn how Ethermint works from a high-level perspective, go to the [Introduction](https://docs.evmos.org/about/intro/overview.html) section from the documentation. You can also check the instructions to [Run a Node](https://docs.evmos.org/validators/quickstart/run_node.html).
-
-For an example on how Ethermint can be used on any Cosmos-SDK chain, please refer to [Evmos](https://www.github.com/tharsis/evmos).
 
 ## Community
 
 The following chat channels and forums are a great spot to ask questions about Ethermint:
 
 - [Evmos Twitter](https://twitter.com/EvmosOrg)
-- [Evmos Discord](https://discord.gg/trje9XuAmy)
+- [Evmos Discord](https://discord.gg/evmos)
 - [Evmos Telegram](https://t.me/EvmosOrg)
-- [Tharsis Twitter](https://twitter.com/TharsisHQ)
+- [Altiplanic Twitter](https://twitter.com/Altiplanic_io)
 
-## Contributing
 
-Looking for a good place to start contributing? Check out some [`good first issues`](https://github.com/evmos/ethermint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
 
-For additional instructions, standards and style guides, please refer to the [Contributing](./CONTRIBUTING.md) document.
-
-## Careers
-
-See our open positions on [Greenhouse](https://boards.eu.greenhouse.io/evmos).

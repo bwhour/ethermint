@@ -4,14 +4,14 @@ go 1.19
 
 require (
 	cosmossdk.io/errors v1.0.0-beta.7
-	cosmossdk.io/math v1.0.0-beta.6
+	cosmossdk.io/math v1.0.0-rc.0
 	github.com/armon/go-metrics v0.4.1
-	github.com/btcsuite/btcd v0.22.2
-	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
+	github.com/btcsuite/btcd v0.23.4
+	github.com/btcsuite/btcd/btcutil v1.1.3
 	github.com/cosmos/cosmos-proto v1.0.0-beta.3
-	github.com/cosmos/cosmos-sdk v0.46.8
+	github.com/cosmos/cosmos-sdk v0.46.11
 	github.com/cosmos/go-bip39 v1.0.0
-	github.com/cosmos/gogoproto v1.4.6
+	github.com/cosmos/gogoproto v1.4.7
 	github.com/cosmos/ibc-go/v6 v6.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.10.26
@@ -20,26 +20,27 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
-	github.com/holiman/uint256 v1.2.1
+	github.com/holiman/uint256 v1.2.2
 	github.com/improbable-eng/grpc-web v0.15.0
-	github.com/miguelmota/go-ethereum-hdwallet v0.1.1
-	github.com/onsi/ginkgo/v2 v2.9.0
-	github.com/onsi/gomega v1.27.2
+	github.com/onsi/ginkgo/v2 v2.9.2
+	github.com/onsi/gomega v1.27.6
 	github.com/pkg/errors v0.9.1
 	github.com/rakyll/statik v0.1.7
-	github.com/rs/cors v1.8.3
+	github.com/rs/cors v1.9.0
 	github.com/spf13/cast v1.5.0
-	github.com/spf13/cobra v1.6.1
+	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.15.0
 	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.8.2
-	github.com/tendermint/tendermint v0.34.24
+	github.com/tendermint/tendermint v0.34.27
 	github.com/tendermint/tm-db v0.6.7
+	github.com/tidwall/gjson v1.14.4
+	github.com/tidwall/sjson v1.2.5
 	github.com/tyler-smith/go-bip39 v1.1.0
-	golang.org/x/net v0.8.0
-	golang.org/x/text v0.8.0
+	golang.org/x/net v0.9.0
+	golang.org/x/text v0.9.0
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
-	google.golang.org/grpc v1.53.0
+	google.golang.org/grpc v1.54.0
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -67,10 +68,11 @@ require (
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/cockroachdb/apd/v2 v2.0.2 // indirect
 	github.com/coinbase/rosetta-sdk-go v0.7.9 // indirect
+	github.com/cometbft/cometbft-db v0.7.0 // indirect
 	github.com/confio/ics23/go v0.9.0 // indirect
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/gorocksdb v1.2.0 // indirect
-	github.com/cosmos/iavl v0.19.4 // indirect
+	github.com/cosmos/iavl v0.19.5 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.12.2 // indirect
 	github.com/creachadair/taskgroup v0.3.2 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
@@ -95,13 +97,13 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
+	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gogo/gateway v1.1.0 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/btree v1.0.1 // indirect
+	github.com/google/btree v1.1.2 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/orderedcode v0.0.1 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
@@ -123,7 +125,7 @@ require (
 	github.com/hdevalence/ed25519consensus v0.0.0-20220222234857-c00d1f31bab3 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
-	github.com/inconshreveable/mousetrap v1.0.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
@@ -147,9 +149,9 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.12.2 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.34.0 // indirect
+	github.com/prometheus/client_golang v1.14.0 // indirect
+	github.com/prometheus/client_model v0.3.0 // indirect
+	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/prometheus/tsdb v0.7.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
@@ -164,8 +166,11 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
+	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c // indirect
 	github.com/tendermint/go-amino v0.16.0 // indirect
 	github.com/tidwall/btree v1.5.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
@@ -173,17 +178,17 @@ require (
 	github.com/zondax/ledger-go v0.14.1 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.3.0 // indirect
+	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/tools v0.6.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/term v0.7.0 // indirect
+	golang.org/x/tools v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.107.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.2-0.20220831092852-f930b1dc76e8 // indirect
+	google.golang.org/protobuf v1.29.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -199,4 +204,5 @@ replace (
 	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.7.0
 	// use cosmos flavored protobufs
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+	github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.27
 )
